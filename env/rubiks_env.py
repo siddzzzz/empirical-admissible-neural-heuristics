@@ -18,8 +18,9 @@ class RubiksEnv(gym.Env):
         self.scramble_moves = scramble_moves
         self.render_mode = render_mode
         
-        # 18 moves: U, U', U2, D, D', D2, etc.
-        self.action_space = spaces.Discrete(18)
+        # 18 primitive moves + any registered macros
+        num_actions = len(self.cube.action_space_names)
+        self.action_space = spaces.Discrete(num_actions)
         
         # One-hot encoding of 24 stickers * 6 colors
         self.observation_space = spaces.Box(low=0.0, high=1.0, shape=(144,), dtype=np.float32)
@@ -56,11 +57,14 @@ class RubiksEnv(gym.Env):
         old_state = self.cube.get_state()
         new_state = self.cube.step(action)
         
-        is_solved = self.cube.is_solved()
-        reward = compute_reward(old_state, new_state, is_solved)
+        action_name = self.cube.action_space_names[action]
+        move_cost = self.cube.action_costs.get(action_name, 1)
         
-        # Increment step counter
-        self.current_step += 1
+        is_solved = self.cube.is_solved()
+        reward = compute_reward(old_state, new_state, is_solved, move_cost=move_cost)
+        
+        # Increment step counter by move cost to reflect time spent
+        self.current_step += move_cost
         
         # For Rubik's cube, episode is done when solved
         terminated = is_solved

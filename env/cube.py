@@ -98,6 +98,36 @@ class Cube2x2:
             'R', "R'", 'R2'
         ]
         
+        # Track cost (number of base moves) for each action
+        self.action_costs = {name: 1 for name in self.action_space_names}
+        
+        # Register standard human macros
+        self._register_macro("Sexy", "R U R' U'")
+        self._register_macro("Sune", "R U R' U R U2 R'")
+        self._register_macro("J-Perm", "R U R' F' R U R' U' R' F R2 U' R' U'")
+        self._register_macro("Y-Perm", "F R U' R' U' R U R' F' R U R' U' R' F R F'")
+
+    def _register_macro(self, name, move_string):
+        """
+        Compiles a space-separated sequence of moves into a single permutation
+        and registers it as a new action in the action space.
+        """
+        moves = move_string.split()
+        
+        # Start with the identity permutation
+        composed_perm = list(range(24))
+        
+        for move in moves:
+            if move not in self._moves:
+                raise ValueError(f"Unknown base move {move} in macro {name}")
+            perm = self._moves[move]
+            # Compose permutation: P_new = P_old[perm]
+            composed_perm = [composed_perm[i] for i in perm]
+            
+        self._moves[name] = composed_perm
+        self.action_space_names.append(name)
+        self.action_costs[name] = len(moves)
+        
     def step(self, action_idx):
         action_name = self.action_space_names[action_idx]
         perm = self._moves[action_name]
@@ -105,6 +135,7 @@ class Cube2x2:
         return self.state
 
     def scramble(self, n_moves=20):
+        # Scramble using only primitive moves (indices 0 to 17)
         for _ in range(n_moves):
-            action_idx = random.randint(0, len(self.action_space_names) - 1)
+            action_idx = random.randint(0, 17)
             self.step(action_idx)

@@ -19,7 +19,7 @@ def calculate_entropy(state):
         entropy += (4 - majority_count)
     return entropy
 
-def compute_reward(old_state, new_state, is_solved):
+def compute_reward(old_state, new_state, is_solved, move_cost=1):
     """
     Compute reward based on solving and entropy reduction.
     """
@@ -32,7 +32,8 @@ def compute_reward(old_state, new_state, is_solved):
     # Entropy reduction reward (small shaping reward)
     entropy_diff = old_entropy - new_entropy
     
-    # Step penalty to encourage shorter solutions
-    step_penalty = -0.1
+    # Step penalty to encourage shorter solutions.
+    # We scale it by move_cost so the agent doesn't spam macros pointlessly.
+    step_penalty = -0.1 * move_cost
     
     return (entropy_diff * 1.0) + step_penalty

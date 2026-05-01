@@ -67,16 +67,37 @@ def train():
     macro_discoverer = MacroDiscoverer()
     
     print("Creating Tactical Agent (PPO)...")
-    model = create_tactical_agent(env)
+    
+    # Check if a saved model exists to resume training
+    model_path = "trained_models/tactical_agent.zip"
+    if os.path.exists(model_path):
+        print(f"Found existing model at {model_path}. Resuming training!")
+        from stable_baselines3 import PPO
+        model = PPO.load(model_path, env=env)
+    else:
+        print("No existing model found. Starting fresh.")
+        model = create_tactical_agent(env)
     
     scheduler = CurriculumScheduler(start_moves=1, max_moves=20, threshold_success_rate=0.8, window_size=50)
     callback = CombinedCallback(macro_discoverer, scheduler)
+    
+    # Add a CheckpointCallback to save the model every 500,000 steps
+    from stable_baselines3.common.callbacks import CheckpointCallback
+    checkpoint_callback = CheckpointCallback(
+        save_freq=500_000,
+        save_path='./trained_models/',
+        name_prefix='tactical_agent_ckpt'
+    )
+    
+    # Combine the callbacks
+    from stable_baselines3.common.callbacks import CallbackList
+    callback_list = CallbackList([callback, checkpoint_callback])
 
     print("Starting Training Loop (This will actually train the network now)...")
     # Train for a sufficient number of timesteps to see learning on 2x2
     # Since episodes are very short (e.g. 5-20 steps), 100k timesteps is thousands of episodes.
-    total_timesteps = 15_000_000 
-    model.learn(total_timesteps=total_timesteps, callback=callback)
+    total_timesteps = 5_000_000 
+    model.learn(total_timesteps=total_timesteps, callback=callback_list, reset_num_timesteps=False)
 
     print("Training loop complete.")
     
