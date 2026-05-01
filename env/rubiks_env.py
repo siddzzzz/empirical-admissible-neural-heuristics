@@ -45,9 +45,17 @@ class RubiksEnv(gym.Env):
             
         self.cube.reset()
         self.current_step = 0
+        self.achieved_subgoals = {
+            'first_layer': False,
+            'oll': False
+        }
         
         if scramble_length > 0:
             self.cube.scramble(scramble_length)
+            
+        # Re-evaluate initial state (in case scramble length was 0)
+        self.achieved_subgoals['first_layer'] = self.cube.is_first_layer_solved()
+        self.achieved_subgoals['oll'] = self.cube.is_oll_solved()
             
         obs = self._get_obs()
         info = {'is_solved': self.cube.is_solved()}
@@ -60,8 +68,22 @@ class RubiksEnv(gym.Env):
         action_name = self.cube.action_space_names[action]
         move_cost = self.cube.action_costs.get(action_name, 1)
         
+        # Check subgoals
         is_solved = self.cube.is_solved()
-        reward = compute_reward(old_state, new_state, is_solved, move_cost=move_cost)
+        first_layer = self.cube.is_first_layer_solved()
+        oll = self.cube.is_oll_solved()
+        
+        reward = compute_reward(
+            old_state, new_state, is_solved,
+            move_cost=move_cost,
+            achieved_subgoals=self.achieved_subgoals,
+            current_first_layer=first_layer,
+            current_oll=oll
+        )
+        
+        # Update trackers
+        if first_layer: self.achieved_subgoals['first_layer'] = True
+        if oll: self.achieved_subgoals['oll'] = True
         
         # Increment step counter by move cost to reflect time spent
         self.current_step += move_cost

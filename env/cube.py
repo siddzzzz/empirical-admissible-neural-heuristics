@@ -47,6 +47,30 @@ class Cube2x2:
                 return False
         return True
 
+    def is_first_layer_solved(self):
+        """
+        Check if the 'U' layer (faces 0-3) is completely solved.
+        Requires U face to be solid color (0), and the adjacent ring to match.
+        """
+        # U face is color 0
+        if not np.all(self.state[0:4] == 0):
+            return False
+            
+        # Adjacent ring: F(8,9), B(12,13), L(16,17), R(20,21)
+        if self.state[8] != self.state[9]: return False
+        if self.state[12] != self.state[13]: return False
+        if self.state[16] != self.state[17]: return False
+        if self.state[20] != self.state[21]: return False
+        
+        return True
+        
+    def is_oll_solved(self):
+        """
+        Check if the Orient Last Layer (OLL) is complete.
+        For our fixed color scheme, D face (4-7) must be solid color 1 (Yellow).
+        """
+        return np.all(self.state[4:8] == 1)
+
     def get_state(self):
         return self.state.copy()
 
