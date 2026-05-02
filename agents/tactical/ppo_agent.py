@@ -30,6 +30,8 @@ def create_tactical_agent(env, device="auto"):
     """
     Creates a PPO agent for the Rubik's Cube environment.
     """
+    policy_kwargs = dict(net_arch=dict(pi=[1024, 1024, 1024], vf=[1024, 1024, 1024]))
+    
     model = PPO(
         "MlpPolicy",
         env,
@@ -38,6 +40,7 @@ def create_tactical_agent(env, device="auto"):
         n_steps=2048,
         batch_size=64,
         ent_coef=0.02, # Encourage exploration
-        device=device
+        device=device,
+        policy_kwargs=policy_kwargs
     )
     return model

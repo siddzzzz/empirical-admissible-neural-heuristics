@@ -69,7 +69,7 @@ def train():
     print("Creating Tactical Agent (PPO)...")
     
     # Check if a saved model exists to resume training
-    model_path = "trained_models/tactical_agent_layer.zip"
+    model_path = "trained_models_large_brain/tactical_agent.zip"
     if os.path.exists(model_path):
         print(f"Found existing model at {model_path}. Resuming training!")
         from stable_baselines3 import PPO
@@ -85,8 +85,8 @@ def train():
     from stable_baselines3.common.callbacks import CheckpointCallback
     checkpoint_callback = CheckpointCallback(
         save_freq=500_000,
-        save_path='./trained_models/',
-        name_prefix='tactical_agent_layer_ckpt'
+        save_path='./trained_models_large_brain/',
+        name_prefix='tactical_agent_ckpt'
     )
     
     # Combine the callbacks
@@ -103,8 +103,8 @@ def train():
     
     # Save model
     # Create dir if not exists
-    os.makedirs("trained_models", exist_ok=True)
-    model_path = "trained_models/tactical_agent_layer"
+    os.makedirs("trained_models_large_brain", exist_ok=True)
+    model_path = "trained_models_large_brain/tactical_agent"
     print(f"Saving tactical agent to {model_path}...")
     model.save(model_path)
 
