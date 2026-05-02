@@ -44,7 +44,7 @@ class RubiksEnv(gym.Env):
             scramble_length = options['scramble_moves']
             
         self.cube.reset()
-        self.current_step = 0
+        self.num_actions_taken = 0
         self.achieved_subgoals = {
             'first_layer': False,
             'oll': False
@@ -85,15 +85,16 @@ class RubiksEnv(gym.Env):
         if first_layer: self.achieved_subgoals['first_layer'] = True
         if oll: self.achieved_subgoals['oll'] = True
         
-        # Increment step counter by move cost to reflect time spent
-        self.current_step += move_cost
+        # Increment RL action counter
+        self.num_actions_taken += 1
         
         # For Rubik's cube, episode is done when solved
         terminated = is_solved
         
-        # Truncate if we exceed the maximum allowed steps (e.g. scramble moves + 10 buffer)
-        max_allowed_steps = max(10, self.scramble_moves + 10)
-        truncated = self.current_step >= max_allowed_steps
+        # Truncate if we exceed the maximum allowed RL decisions
+        # We give the agent a minimum of 20 decisions, or double the scramble depth for harder scrambles.
+        max_allowed_actions = max(20, self.scramble_moves * 2)
+        truncated = self.num_actions_taken >= max_allowed_actions
         
         obs = self._get_obs()
         info = {

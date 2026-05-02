@@ -37,7 +37,7 @@ def create_tactical_agent(env, device="auto"):
         learning_rate=3e-4,
         n_steps=2048,
         batch_size=64,
-        ent_coef=0.01, # Encourage exploration
+        ent_coef=0.02, # Encourage exploration
         device=device
     )
     return model
