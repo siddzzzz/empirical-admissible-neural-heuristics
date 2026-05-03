@@ -96,7 +96,7 @@ def train():
     print("Starting Training Loop (This will actually train the network now)...")
     # Train for a sufficient number of timesteps to see learning on 2x2
     # Since episodes are very short (e.g. 5-20 steps), 100k timesteps is thousands of episodes.
-    total_timesteps = 5_000_000 
+    total_timesteps = 150_000_000 
     model.learn(total_timesteps=total_timesteps, callback=callback_list, reset_num_timesteps=False)
 
     print("Training loop complete.")
