@@ -68,12 +68,36 @@ def train():
     
     print("Creating Tactical Agent (PPO)...")
     
+    import glob
+    import re
+    
     # Check if a saved model exists to resume training
-    model_path = "trained_models_large_brain/tactical_agent.zip"
-    if os.path.exists(model_path):
-        print(f"Found existing model at {model_path}. Resuming training!")
+    checkpoint_dir = "trained_models_large_brain"
+    latest_model_path = None
+    
+    # First, look for the latest checkpoint file
+    checkpoint_files = glob.glob(os.path.join(checkpoint_dir, "tactical_agent_ckpt_*_steps.zip"))
+    if checkpoint_files:
+        # Extract the step number from the filenames to find the absolute latest one
+        def extract_step(filepath):
+            match = re.search(r'ckpt_(\d+)_steps', filepath)
+            return int(match.group(1)) if match else -1
+            
+        latest_model_path = max(checkpoint_files, key=extract_step)
+        print(f"Found latest checkpoint: {latest_model_path}")
+    elif os.path.exists(os.path.join(checkpoint_dir, "tactical_agent.zip")):
+        # Fallback to the fully completed model if no checkpoints exist
+        latest_model_path = os.path.join(checkpoint_dir, "tactical_agent.zip")
+        print(f"Found base model: {latest_model_path}")
+
+    if latest_model_path:
+        print(f"Resuming training from {latest_model_path}!")
         from stable_baselines3 import PPO
-        model = PPO.load(model_path, env=env)
+        custom_objects = {
+            "learning_rate": 5e-5,
+            "ent_coef": 0.005,
+        }
+        model = PPO.load(latest_model_path, env=env, custom_objects=custom_objects)
     else:
         print("No existing model found. Starting fresh.")
         model = create_tactical_agent(env)

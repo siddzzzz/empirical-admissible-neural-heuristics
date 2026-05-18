@@ -35,4 +35,11 @@ class CurriculumScheduler:
         return False
 
     def get_scramble_moves(self):
-        return self.current_moves
+        # Prevent catastrophic forgetting by occasionally returning easier scrambles
+        # We use a random value between 1 and current_moves to ensure it still practices the fundamentals!
+        import random
+        # 50% chance to do the hardest scramble, 50% chance to do a random easier one
+        if random.random() < 0.5:
+            return self.current_moves
+        else:
+            return random.randint(1, max(1, self.current_moves))

@@ -36,10 +36,10 @@ def create_tactical_agent(env, device="auto"):
         "MlpPolicy",
         env,
         verbose=1,
-        learning_rate=3e-4,
+        learning_rate=5e-5,
         n_steps=2048,
         batch_size=64,
-        ent_coef=0.02, # Encourage exploration
+        ent_coef=0.005, # Restoring a tiny bit of curiosity to break the local minimum
         device=device,
         policy_kwargs=policy_kwargs
     )
