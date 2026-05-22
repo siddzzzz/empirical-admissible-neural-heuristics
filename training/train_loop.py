@@ -1,136 +1,224 @@
 import sys
 import os
+import torch
+import torch.nn as nn
+import numpy as np
+import random
+import time
+import gc
 
 # Ensure the root project directory is in the path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from env.rubiks_env import RubiksEnv
-from agents.tactical.ppo_agent import create_tactical_agent, TrajectoryCallback
-from agents.tactical.macro_discovery import MacroDiscoverer
-from training.curriculum import CurriculumScheduler
-from stable_baselines3.common.callbacks import BaseCallback
+from env.cube import Cube2x2
+from agents.tactical.value_agent import ValueNet, batch_to_tensor, save_model
+from training.solver import AStarSolver
 
-class CombinedCallback(BaseCallback):
+def is_solved_batch(states: np.ndarray) -> np.ndarray:
     """
-    Handles saving successful trajectories and managing the curriculum difficulty.
+    Checks if a batch of states are in a solved state.
+    states shape: (N, 24)
+    returns: boolean array of shape (N,)
     """
-    def __init__(self, macro_discoverer, scheduler, verbose=0):
-        super(CombinedCallback, self).__init__(verbose)
-        self.macro_discoverer = macro_discoverer
-        self.scheduler = scheduler
-        self.current_trajectory = []
-        self.episodes = 0
+    reshaped = states.reshape(-1, 6, 4)
+    return np.all(reshaped[:, :, 1:] == reshaped[:, :, :1], axis=(1, 2))
 
-    def _on_step(self) -> bool:
-        # Save action to trajectory
-        action = self.locals.get('actions')[0]
-        self.current_trajectory.append(action)
-        
-        # Check if environment is done
-        dones = self.locals.get('dones')
-        if dones[0]:
-            info = self.locals.get('infos')[0]
-            is_solved = info.get('is_solved', False)
-            
-            # Record trajectory if solved
-            if is_solved:
-                self.macro_discoverer.add_trajectory(self.current_trajectory)
-            
-            # Record success for curriculum
-            self.scheduler.record_result(is_solved)
-            
-            self.current_trajectory = []
-            self.episodes += 1
-            
-            # Step curriculum periodically
-            if self.scheduler.step():
-                new_moves = self.scheduler.get_scramble_moves()
-                # Update the environment scramble difficulty
-                self.training_env.env_method('set_scramble_moves', new_moves)
-                
-            if self.episodes % 50 == 0:
-                sr = self.scheduler.get_success_rate()
-                print(f"Episode {self.episodes} | Curriculum Moves: {self.scheduler.get_scramble_moves()} | Success Rate: {sr:.2f}")
-                
-            if self.episodes % 100 == 0:
-                new_macros = self.macro_discoverer.discover_macros()
-                if new_macros:
-                    print(f"New macros discovered. (Integration into action space pending)")
-                    
-        return True
+def get_next_states(states: np.ndarray, action_perms: list) -> np.ndarray:
+    """
+    Applies all 18 primitive actions to a batch of states.
+    states shape: (B, 24)
+    returns: next_states of shape (B, 18, 24)
+    """
+    B = states.shape[0]
+    next_states = np.zeros((B, 18, 24), dtype=states.dtype)
+    for a in range(18):
+        next_states[:, a, :] = states[:, action_perms[a]]
+    return next_states
+
+def generate_batch(batch_size, max_depth, action_perms):
+    """
+    Generates a batch of scrambled states, with scramble depths sampled uniformly from 1 to max_depth.
+    Uses cached permutations for extreme speed.
+    """
+    states = np.zeros((batch_size, 24), dtype=np.int8)
+    solved_state = np.array([
+        0, 0, 0, 0, # U
+        1, 1, 1, 1, # D
+        2, 2, 2, 2, # F
+        3, 3, 3, 3, # B
+        4, 4, 4, 4, # L
+        5, 5, 5, 5  # R
+    ], dtype=np.int8)
+    
+    for i in range(batch_size):
+        state = solved_state.copy()
+        # Sample depth uniformly from 1 to max_depth
+        d = random.randint(1, max_depth)
+        for _ in range(d):
+            action_idx = random.randint(0, 17)
+            state = state[action_perms[action_idx]]
+        states[i] = state
+    return states
+
+def evaluate_model(model, device, depth, num_cubes=100, max_nodes=1000) -> float:
+    """
+    Evaluates the model's solve success rate on random scrambles at the given depth using A* search.
+    """
+    model.eval()
+    solver = AStarSolver(model, device=device, use_macros=True)
+    solved_count = 0
+    c = Cube2x2()
+    for _ in range(num_cubes):
+        c.reset()
+        c.scramble(depth)
+        path, nodes = solver.solve(c.state, max_nodes=max_nodes)
+        if path is not None:
+            solved_count += 1
+    return solved_count / num_cubes
 
 def train():
-    print("Initializing Rubik's Cube Environment...")
-    env = RubiksEnv(scramble_moves=1)
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    print(f"Using device: {device}")
     
-    print("Initializing Macro Discoverer...")
-    macro_discoverer = MacroDiscoverer()
+    # Initialize models
+    model = ValueNet().to(device)
+    target_model = ValueNet().to(device)
+    target_model.load_state_dict(model.state_dict())
+    target_model.eval()
     
-    print("Creating Tactical Agent (PPO)...")
+    optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3, weight_decay=1e-5)
+    loss_fn = nn.HuberLoss()
     
-    import glob
-    import re
+    # Cache action permutations for fast transitions
+    helper_cube = Cube2x2()
+    action_perms = [helper_cube._moves[helper_cube.action_space_names[a]] for a in range(18)]
     
-    # Check if a saved model exists to resume training
-    checkpoint_dir = "trained_models_large_brain"
-    latest_model_path = None
-    
-    # First, look for the latest checkpoint file
-    checkpoint_files = glob.glob(os.path.join(checkpoint_dir, "tactical_agent_ckpt_*_steps.zip"))
-    if checkpoint_files:
-        # Extract the step number from the filenames to find the absolute latest one
-        def extract_step(filepath):
-            match = re.search(r'ckpt_(\d+)_steps', filepath)
-            return int(match.group(1)) if match else -1
+    # Curriculum settings
+    max_depth = 14
+    success_threshold = 0.90 # Require 90% solve rate to advance depth
+    curriculum_depth = 1
+
+    # Check if a model already exists to resume training
+    model_dir = "trained_models"
+    model_path = os.path.join(model_dir, "value_agent.pt")
+    if os.path.exists(model_path):
+        try:
+            print(f"Loading checkpoint from {model_path} to resume training...")
+            model.load_state_dict(torch.load(model_path, map_location=device))
+            target_model.load_state_dict(model.state_dict())
+            print("Successfully loaded model!")
             
-        latest_model_path = max(checkpoint_files, key=extract_step)
-        print(f"Found latest checkpoint: {latest_model_path}")
-    elif os.path.exists(os.path.join(checkpoint_dir, "tactical_agent.zip")):
-        # Fallback to the fully completed model if no checkpoints exist
-        latest_model_path = os.path.join(checkpoint_dir, "tactical_agent.zip")
-        print(f"Found base model: {latest_model_path}")
-
-    if latest_model_path:
-        print(f"Resuming training from {latest_model_path}!")
-        from stable_baselines3 import PPO
-        custom_objects = {
-            "learning_rate": 5e-5,
-            "ent_coef": 0.005,
-        }
-        model = PPO.load(latest_model_path, env=env, custom_objects=custom_objects)
-    else:
-        print("No existing model found. Starting fresh.")
-        model = create_tactical_agent(env)
+            # Find the correct curriculum depth to start with
+            print("Evaluating loaded model to determine curriculum starting depth...")
+            for d in range(1, max_depth + 1):
+                val_sr = evaluate_model(model, device, d, num_cubes=30)
+                print(f"Depth {d} Success Rate: {val_sr*100:.1f}%")
+                if val_sr >= success_threshold:
+                    curriculum_depth = d + 1
+                else:
+                    curriculum_depth = max(1, d)
+                    break
+            curriculum_depth = min(curriculum_depth, max_depth)
+        except Exception as e:
+            print(f"Could not load checkpoint: {e}. Starting fresh.")
+            
+        # Clean up memory after initial evaluation runs
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            
+    batch_size = 256
+    target_update_freq = 100
+    eval_freq = 500
     
-    scheduler = CurriculumScheduler(start_moves=1, max_moves=20, threshold_success_rate=0.8, window_size=50)
-    callback = CombinedCallback(macro_discoverer, scheduler)
+    step = 0
+    start_time = time.time()
     
-    # Add a CheckpointCallback to save the model every 500,000 steps
-    from stable_baselines3.common.callbacks import CheckpointCallback
-    checkpoint_callback = CheckpointCallback(
-        save_freq=500_000,
-        save_path='./trained_models_large_brain/',
-        name_prefix='tactical_agent_ckpt'
-    )
+    print("Starting Hierarchical Deep Approximate Value Iteration (H-DAVI) Training Loop...")
+    print(f"Initial Curriculum Scramble Depth: {curriculum_depth}")
     
-    # Combine the callbacks
-    from stable_baselines3.common.callbacks import CallbackList
-    callback_list = CallbackList([callback, checkpoint_callback])
-
-    print("Starting Training Loop (This will actually train the network now)...")
-    # Train for a sufficient number of timesteps to see learning on 2x2
-    # Since episodes are very short (e.g. 5-20 steps), 100k timesteps is thousands of episodes.
-    total_timesteps = 150_000_000 
-    model.learn(total_timesteps=total_timesteps, callback=callback_list, reset_num_timesteps=False)
-
-    print("Training loop complete.")
+    try:
+        while curriculum_depth <= max_depth:
+            model.train()
+            
+            # 1. Generate scrambled states
+            states = generate_batch(batch_size, curriculum_depth, action_perms)
+            
+            # 2. Get next-states for all 18 primitive actions
+            next_states = get_next_states(states, action_perms) # (B, 18, 24)
+            next_states_flat = next_states.reshape(-1, 24) # (B * 18, 24)
+            
+            # 3. Check which next-states are solved
+            solved_mask = is_solved_batch(next_states_flat) # (B * 18,) boolean array
+            
+            # 4. Predict target values for next states
+            next_states_tensor = batch_to_tensor(next_states_flat, device) # (B * 18, 144)
+            with torch.no_grad():
+                target_values = target_model(next_states_tensor).squeeze(-1) # (B * 18,)
+                
+                # If a next-state is solved, its remaining distance to solved is 0
+                target_values[solved_mask] = 0.0
+                
+                # Add step cost (1.0 for primitive actions)
+                target_values = target_values + 1.0
+                
+                # Reshape back to (B, 18) and get minimum target cost-to-go
+                target_values = target_values.view(batch_size, 18)
+                y = torch.min(target_values, dim=1).values # (B,)
+                
+            # 5. Predict values for current states and update network
+            states_tensor = batch_to_tensor(states, device) # (B, 144)
+            predictions = model(states_tensor).squeeze(-1) # (B,)
+            
+            # If the current state itself is solved, target should be 0.0
+            states_solved_mask = is_solved_batch(states)
+            y[states_solved_mask] = 0.0
+            
+            loss = loss_fn(predictions, y)
+            
+            optimizer.zero_grad(set_to_none=True)
+            loss.backward()
+            optimizer.step()
+            
+            step += 1
+            
+            # 6. Periodically update target network and clear memory cache
+            if step % target_update_freq == 0:
+                target_model.load_state_dict(model.state_dict())
+                gc.collect()
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                
+            # 7. Periodically evaluate and adjust curriculum
+            if step % eval_freq == 0:
+                # Evaluate on 100 cubes at current depth
+                val_sr = evaluate_model(model, device, curriculum_depth, num_cubes=100)
+                
+                # Clear memory right after A* evaluation (which creates lots of temp variables)
+                gc.collect()
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                    
+                elapsed = time.time() - start_time
+                print(f"Step {step} | Elapsed: {elapsed:.1f}s | Depth {curriculum_depth} Loss: {loss.item():.4f} | Validation Success Rate: {val_sr:.2f}")
+                
+                if val_sr >= success_threshold:
+                    print(f"--- Curriculum Level Up! Depth {curriculum_depth} passed with {val_sr*100:.1f}% success rate. ---")
+                    curriculum_depth += 1
+                    if curriculum_depth > max_depth:
+                        print("🎉 CONGRATULATIONS! Model has successfully solved all curriculum depths up to God's Number! 🎉")
+                        break
+                    print(f"New Scramble Depth: {curriculum_depth}")
+                    
+                    # Save intermediate weights
+                    save_model(model, model_path)
+                    
+    except KeyboardInterrupt:
+        print("\nTraining interrupted by user. Saving progress...")
     
-    # Save model
-    # Create dir if not exists
-    os.makedirs("trained_models_large_brain", exist_ok=True)
-    model_path = "trained_models_large_brain/tactical_agent"
-    print(f"Saving tactical agent to {model_path}...")
-    model.save(model_path)
+    # Save final model
+    save_model(model, model_path)
+    print("Training finished.")
 
 if __name__ == '__main__':
     train()

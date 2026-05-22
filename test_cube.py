@@ -6,7 +6,8 @@ def test_moves():
     assert c.is_solved(), "Initial state should be solved"
     
     # Test all 18 moves: performing a move 4 times (for 90 deg) or 2 times (for 180 deg) should restore the state
-    for i, move in enumerate(c.action_space_names):
+    for i in range(18):
+        move = c.action_space_names[i]
         c.reset()
         is_double = '2' in move
         reps = 2 if is_double else 4
@@ -19,7 +20,8 @@ def test_moves():
             return False
 
     # Test move and its prime
-    for i, move in enumerate(c.action_space_names):
+    for i in range(18):
+        move = c.action_space_names[i]
         if "'" in move or '2' in move:
             continue
         
