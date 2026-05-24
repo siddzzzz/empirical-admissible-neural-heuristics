@@ -75,11 +75,17 @@ def run_evaluation():
     print("==========================================================")
     
     puzzles_info = {
-        "lightsout": {
+        "lightsout_3x3": {
             "name": "Lights Out (3x3 Grid)",
             "class": LightsOut(W=3, H=3),
             "test_depth": 8,
-            "weights": "trained_models/admissible_lightsout.pt"
+            "weights": "trained_models/admissible_lightsout_3x3.pt"
+        },
+        "lightsout_5x5": {
+            "name": "Lights Out (5x5 Grid)",
+            "class": LightsOut(W=5, H=5),
+            "test_depth": 10,
+            "weights": "trained_models/admissible_lightsout_5x5.pt"
         },
         "tile8": {
             "name": "8-Puzzle (3x3 Sliding Tiles)",
@@ -106,7 +112,11 @@ def run_evaluation():
         if not os.path.exists(weights_path):
             print(f"Warning: Trained weights not found at {weights_path}.")
             print("To run this evaluation, train the model first using:")
-            print(f"  python admissible_heuristic_search/training/train_admissible.py --puzzle {key}")
+            if "lightsout" in key:
+                size = "5" if "5x5" in key else "3"
+                print(f"  python admissible_heuristic_search/training/train_admissible.py --puzzle lightsout --grid_size {size}")
+            else:
+                print(f"  python admissible_heuristic_search/training/train_admissible.py --puzzle {key}")
             continue
             
         # Load model

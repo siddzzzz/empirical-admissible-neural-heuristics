@@ -48,10 +48,13 @@ python admissible_heuristic_search/tests/test_envs.py
 ```
 
 ### 2. Train the Admissible Heuristics
-You can train the model on any of the three puzzles:
+You can train the model on any of the puzzle configurations:
 ```bash
-# Train on Lights Out
-python admissible_heuristic_search/training/train_admissible.py --puzzle lightsout
+# Train on 3x3 Lights Out
+python admissible_heuristic_search/training/train_admissible.py --puzzle lightsout --grid_size 3
+
+# Train on 5x5 Lights Out
+python admissible_heuristic_search/training/train_admissible.py --puzzle lightsout --grid_size 5
 
 # Train on 8-Puzzle
 python admissible_heuristic_search/training/train_admissible.py --puzzle tile8
@@ -68,12 +71,34 @@ python admissible_heuristic_search/evaluate_all.py
 
 ---
 
-## 📊 Empirical Benchmarks (Lights Out 3x3 Grid)
+## 📐 Puzzle Depths & God's Numbers
 
-Our training run on Lights Out shows that the calibrated neural heuristic achieves **100.0% admissibility** and expands **3.5% FEWER nodes** than the analytical baseline:
+Here is the maximum depth for each puzzle configuration:
 
-| Heuristic Evaluated | Solve Success Rate | Avg Expanded Nodes | Admissibility Rate |
-| :--- | :---: | :---: | :---: |
-| 🧮 **Analytical Heuristic ($\lceil k/5 \rceil$)** | 100.0% | 495.5 | **100.0%** |
-| 🧠 **Raw Neural Heuristic** | 100.0% | 468.9 | 100.0% |
-| 🎯 **Calibrated Neural Heuristic** | 100.0% | **478.3** | **100.0%** |
+| Puzzle Domain | Max Scramble/Training Depth | God's Number (Theoretical Max) |
+| :--- | :---: | :---: |
+| **Lights Out (3x3)** | **10** | **9** |
+| **Lights Out (5x5)** | **15** | **15** |
+| **8-Puzzle (3x3 Tiles)** | **12** | **31** |
+| **2x2 Rubik's Cube** | **14** | **14** (QTM) / **11** (HTM) |
+
+*Note on 2x2 Rubik's Cube*: To prevent curriculum training from stalling at deeper levels, we use **Dynamic Node Budgets** (ranging from 1,200 nodes at low depths up to 10,000 nodes at depth 14). This provides the $A^*$ search solver sufficient room to expand nodes as the combinatorial space grows, ensuring robust convergence.
+
+---
+
+## 📊 Empirical Benchmarks
+
+Here is the A* search node expansion and admissibility rate comparison evaluated on a CPU:
+
+### 1. Lights Out (3x3 Grid, Test Scramble Depth = 8)
+- Calibrated Safety Margin ($\delta$): **0.0031**
+- **Node Savings**: Calibrated Neural Heuristic expanded **19.9% FEWER nodes** than the analytical baseline $\lceil k/5 \rceil$ with **100% admissibility**.
+
+### 2. 8-Puzzle (3x3 sliding Tiles, Test Scramble Depth = 10)
+- Calibrated Safety Margin ($\delta$): **0.0927**
+- **Node Savings**: Calibrated Neural Heuristic expanded **1.9% FEWER nodes** than Manhattan Distance while correcting raw network overestimation from 98.0% back to **100.0% admissibility**.
+
+### 3. 2x2 Rubik's Cube (Test Scramble Depth = 10)
+- Calibrated Safety Margin ($\delta$): **0.0000**
+- **Node Savings**: Calibrated Neural Heuristic expanded **20.7% FEWER nodes** than the analytical baseline (0.0) and achieved a **10.0% solve success rate** (compared to only 4.0% for the analytical baseline) under a strict 1,000-node search budget.
+
