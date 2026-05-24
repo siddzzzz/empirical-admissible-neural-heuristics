@@ -1,5 +1,6 @@
 import sys
 import os
+os.environ["CUDA_VISIBLE_DEVICES"] = ""
 import torch
 import numpy as np
 import random
@@ -96,8 +97,8 @@ def train():
                         help="Safety discount parameter for the Admissible Bellman Operator.")
     parser.add_argument("--lr", type=float, default=1e-3,
                         help="Optimizer learning rate.")
-    parser.add_argument("--steps", type=int, default=5000,
-                        help="Number of training steps (default 5000 for verification).")
+    parser.add_argument("--steps", type=int, default=-1,
+                        help="Number of training steps (default -1 to run indefinitely).")
     
     # Allow running in script mode with default values if args are empty
     args, unknown = parser.parse_known_args()
@@ -150,7 +151,7 @@ def train():
     print(f"Initial Scramble Depth: {curriculum_depth}")
     
     try:
-        while step < args.steps and curriculum_depth <= max_depth:
+        while (args.steps == -1 or step < args.steps) and curriculum_depth <= max_depth:
             model.train()
             
             # 1. Generate scrambled states
@@ -165,8 +166,10 @@ def train():
             solved_mask = is_solved_batch(puzzle, next_states_flat) # (B * A,) boolean array
             
             # 4. Predict target values for next states
-            one_hot_next = puzzle.to_one_hot(next_states_flat)
-            next_states_tensor = torch.tensor(one_hot_next, dtype=torch.float32, device=device)
+            num_classes = puzzle.one_hot_dim // puzzle.state_dim
+            next_states_flat_tensor = torch.tensor(next_states_flat, dtype=torch.long, device=device)
+            one_hot_next_tensor = torch.nn.functional.one_hot(next_states_flat_tensor, num_classes=num_classes).float()
+            next_states_tensor = one_hot_next_tensor.view(B * A, -1)
             
             with torch.no_grad():
                 target_values = target_model(next_states_tensor).squeeze(-1) # (B * A,)
@@ -187,8 +190,9 @@ def train():
                 y = torch.max(base_h, y - args.epsilon)
                 
             # 5. Predict values for current states and update network
-            one_hot_states = puzzle.to_one_hot(states)
-            states_tensor = torch.tensor(one_hot_states, dtype=torch.float32, device=device)
+            states_tensor_raw = torch.tensor(states, dtype=torch.long, device=device)
+            one_hot_states_tensor = torch.nn.functional.one_hot(states_tensor_raw, num_classes=num_classes).float()
+            states_tensor = one_hot_states_tensor.view(B, -1)
             predictions = model(states_tensor).squeeze(-1) # (B,)
             
             # Target of solved states is strictly 0.0
@@ -201,7 +205,13 @@ def train():
             loss.backward()
             optimizer.step()
             
+            # Explicitly free memory of large batch variables to prevent memory leakage
+            del states, next_states, next_states_flat, solved_mask
+            del next_states_flat_tensor, one_hot_next_tensor, next_states_tensor
+            del target_values, costs_tensor, y, states_tensor_raw, one_hot_states_tensor, states_tensor, predictions, states_solved_mask, loss
+            
             step += 1
+
             
             # 6. Update target network
             if step % target_update_freq == 0:
@@ -224,7 +234,7 @@ def train():
                 else:
                     budget = 1200
                 val_sr, admissible_rate = evaluate_model(
-                    puzzle, model, device, curriculum_depth, num_cubes=25, max_nodes=budget
+                    puzzle, model, device, curriculum_depth, num_cubes=50, max_nodes=budget
                 )
                 
                 gc.collect()

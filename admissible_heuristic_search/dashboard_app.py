@@ -193,6 +193,8 @@ if 'puzzle_type' not in st.session_state:
 def get_puzzle_instance(puzzle_type):
     if puzzle_type == "Lights Out (3x3 Grid)":
         return LightsOut(W=3, H=3)
+    elif puzzle_type == "Lights Out (5x5 Grid)":
+        return LightsOut(W=5, H=5)
     elif puzzle_type == "8-Puzzle (Sliding Tiles)":
         return TilePuzzle(N=3)
     elif puzzle_type == "2x2 Rubik's Cube":
@@ -202,8 +204,8 @@ def get_puzzle_instance(puzzle_type):
 st.sidebar.subheader("🧩 Select Puzzle Domain")
 st.session_state.puzzle_type = st.sidebar.selectbox(
     "Choose a puzzle:",
-    ["Lights Out (3x3 Grid)", "8-Puzzle (Sliding Tiles)", "2x2 Rubik's Cube"],
-    index=["Lights Out (3x3 Grid)", "8-Puzzle (Sliding Tiles)", "2x2 Rubik's Cube"].index(st.session_state.puzzle_type)
+    ["Lights Out (3x3 Grid)", "Lights Out (5x5 Grid)", "8-Puzzle (Sliding Tiles)", "2x2 Rubik's Cube"],
+    index=["Lights Out (3x3 Grid)", "Lights Out (5x5 Grid)", "8-Puzzle (Sliding Tiles)", "2x2 Rubik's Cube"].index(st.session_state.puzzle_type)
 )
 
 # Refresh puzzle instance if changed
@@ -219,7 +221,8 @@ state = st.session_state.puzzle_state
 
 # Load correct neural network heuristic weights
 weights_mapping = {
-    "Lights Out (3x3 Grid)": ("admissible_lightsout.pt", "lightsout"),
+    "Lights Out (3x3 Grid)": ("admissible_lightsout_3x3.pt", "lightsout"),
+    "Lights Out (5x5 Grid)": ("admissible_lightsout_5x5.pt", "lightsout"),
     "8-Puzzle (Sliding Tiles)": ("admissible_tile8.pt", "tile8"),
     "2x2 Rubik's Cube": ("admissible_cube2x2.pt", "cube2x2")
 }
@@ -251,16 +254,16 @@ with tab1:
         st.subheader("Visual puzzle Arena")
         
         # Unique visualizers based on puzzle type
-        if st.session_state.puzzle_type == "Lights Out (3x3 Grid)":
+        if "Lights Out" in st.session_state.puzzle_type:
             st.markdown("<p style='text-align: center; color: #94a3b8;'>Click cells to toggle them and their neighbors. Goal: Turn all lights OFF.</p>", unsafe_allow_html=True)
             
             # Interactive Grid of Buttons
             grid_container = st.container()
             with grid_container:
-                for r in range(3):
-                    cols = st.columns([1, 1, 1])
-                    for c in range(3):
-                        idx = r * 3 + c
+                for r in range(puzzle.H):
+                    cols = st.columns([1] * puzzle.W)
+                    for c in range(puzzle.W):
+                        idx = r * puzzle.W + c
                         val = state[idx]
                         
                         btn_label = "💡 ON" if val == 1 else "🌑 OFF"
@@ -453,9 +456,9 @@ with tab1:
                     # Render puzzle state in the placeholder container
                     with anim_placeholder.container():
                         st.markdown(f"**Step {idx+1}/{len(path)}: {puzzle.action_space_names[act]}**", unsafe_allow_html=True)
-                        if st.session_state.puzzle_type == "Lights Out (3x3 Grid)":
+                        if "Lights Out" in st.session_state.puzzle_type:
                             # Render grid
-                            grid_html = '<div style="display: grid; grid-template-columns: repeat(3, 60px); gap: 10px; justify-content: center; margin-bottom: 20px;">'
+                            grid_html = f'<div style="display: grid; grid-template-columns: repeat({puzzle.W}, 60px); gap: 10px; justify-content: center; margin-bottom: 20px;">'
                             for val in current_st:
                                 bg_color = '#eab308' if val == 1 else '#1e293b'
                                 grid_html += f'<div style="background: {bg_color}; height: 60px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1)"></div>'
@@ -495,7 +498,12 @@ with tab2:
             # Save the active puzzle state before scrambling for calibration
             saved_active_state = state.copy()
             with st.spinner("Scrambling and evaluating predictions..."):
-                max_scramble_val = 12 if argname == "cube2x2" else (10 if argname == "tile8" else 8)
+                if argname == "cube2x2":
+                    max_scramble_val = 12
+                elif argname == "tile8":
+                    max_scramble_val = 10
+                else: # lightsout
+                    max_scramble_val = 15 if puzzle.W == 5 else 8
                 num_samples = 30
                 
                 depths = list(range(1, max_scramble_val + 1))
