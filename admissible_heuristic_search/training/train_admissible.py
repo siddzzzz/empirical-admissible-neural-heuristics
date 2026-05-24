@@ -88,6 +88,8 @@ def train():
     parser.add_argument("--puzzle", type=str, default="lightsout", 
                         choices=["cube2x2", "tile8", "lightsout"],
                         help="Puzzle environment to train on.")
+    parser.add_argument("--grid_size", type=int, default=3,
+                        help="Grid size for Lights Out (3 or 5).")
     parser.add_argument("--alpha", type=float, default=100.0,
                         help="Asymmetric loss penalty multiplier for overestimation.")
     parser.add_argument("--epsilon", type=float, default=0.1,
@@ -110,10 +112,10 @@ def train():
         max_depth = 14
     elif args.puzzle == "tile8":
         puzzle = TilePuzzle(N=3)
-        max_depth = 12
+        max_depth = 31
     elif args.puzzle == "lightsout":
-        puzzle = LightsOut(W=3, H=3)
-        max_depth = 10
+        puzzle = LightsOut(W=args.grid_size, H=args.grid_size)
+        max_depth = 15 if args.grid_size == 5 else 10
         
     print(f"Puzzle initialized: State Dim={puzzle.state_dim}, One-Hot Dim={puzzle.one_hot_dim}, Actions={puzzle.num_actions}")
     
@@ -129,14 +131,17 @@ def train():
     # Training configurations
     batch_size = 128
     target_update_freq = 50
-    eval_freq = 200
+    eval_freq = 500
     success_threshold = 0.90
     curriculum_depth = 1
     
     # Setup weights save path
     model_dir = "trained_models"
     os.makedirs(model_dir, exist_ok=True)
-    model_path = os.path.join(model_dir, f"admissible_{args.puzzle}.pt")
+    if args.puzzle == "lightsout":
+        model_path = os.path.join(model_dir, f"admissible_lightsout_{args.grid_size}x{args.grid_size}.pt")
+    else:
+        model_path = os.path.join(model_dir, f"admissible_{args.puzzle}.pt")
     
     step = 0
     start_time = time.time()
@@ -207,9 +212,19 @@ def train():
                     
             # 7. Evaluate and adjust curriculum
             if step % eval_freq == 0:
-                budget = 5000 if curriculum_depth == max_depth else (3000 if curriculum_depth >= 11 else 1000)
+                # Dynamically scale evaluation budget with curriculum depth to prevent getting stuck
+                if curriculum_depth == max_depth:
+                    budget = 10000
+                elif curriculum_depth >= 11:
+                    budget = 6000
+                elif curriculum_depth >= 8:
+                    budget = 4000
+                elif curriculum_depth >= 5:
+                    budget = 2500
+                else:
+                    budget = 1200
                 val_sr, admissible_rate = evaluate_model(
-                    puzzle, model, device, curriculum_depth, num_cubes=50, max_nodes=budget
+                    puzzle, model, device, curriculum_depth, num_cubes=25, max_nodes=budget
                 )
                 
                 gc.collect()
