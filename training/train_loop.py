@@ -111,8 +111,10 @@ def train():
             # Find the correct curriculum depth to start with
             print("Evaluating loaded model to determine curriculum starting depth...")
             for d in range(1, max_depth + 1):
-                val_sr = evaluate_model(model, device, d, num_cubes=30)
-                print(f"Depth {d} Success Rate: {val_sr*100:.1f}%")
+                # Use progressive budget for deep scrambles
+                budget = 5000 if d == 14 else (3000 if d >= 11 else 1000)
+                val_sr = evaluate_model(model, device, d, num_cubes=30, max_nodes=budget)
+                print(f"Depth {d} Success Rate: {val_sr*100:.1f}% (A* max nodes: {budget})")
                 if val_sr >= success_threshold:
                     curriculum_depth = d + 1
                 else:
@@ -191,8 +193,9 @@ def train():
                 
             # 7. Periodically evaluate and adjust curriculum
             if step % eval_freq == 0:
-                # Evaluate on 100 cubes at current depth
-                val_sr = evaluate_model(model, device, curriculum_depth, num_cubes=100)
+                # Evaluate on 100 cubes at current depth with progressive budget for deep scrambles
+                budget = 5000 if curriculum_depth == 14 else (3000 if curriculum_depth >= 11 else 1000)
+                val_sr = evaluate_model(model, device, curriculum_depth, num_cubes=100, max_nodes=budget)
                 
                 # Clear memory right after A* evaluation (which creates lots of temp variables)
                 gc.collect()
@@ -200,7 +203,7 @@ def train():
                     torch.cuda.empty_cache()
                     
                 elapsed = time.time() - start_time
-                print(f"Step {step} | Elapsed: {elapsed:.1f}s | Depth {curriculum_depth} Loss: {loss.item():.4f} | Validation Success Rate: {val_sr:.2f}")
+                print(f"Step {step} | Elapsed: {elapsed:.1f}s | Depth {curriculum_depth} Loss: {loss.item():.4f} | Validation Success Rate: {val_sr:.2f} (max nodes: {budget})")
                 
                 if val_sr >= success_threshold:
                     print(f"--- Curriculum Level Up! Depth {curriculum_depth} passed with {val_sr*100:.1f}% success rate. ---")
