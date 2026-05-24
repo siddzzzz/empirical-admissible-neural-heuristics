@@ -205,6 +205,8 @@ def train():
             loss.backward()
             optimizer.step()
             
+            loss_val = loss.item()
+            
             # Explicitly free memory of large batch variables to prevent memory leakage
             del states, next_states, next_states_flat, solved_mask
             del next_states_flat_tensor, one_hot_next_tensor, next_states_tensor
@@ -243,7 +245,7 @@ def train():
                     
                 elapsed = time.time() - start_time
                 print(f"Step {step:<5} | Elapsed: {elapsed:.1f}s | Depth: {curriculum_depth:<2} | "
-                      f"Loss: {loss.item():.4f} | Solve Rate: {val_sr*100:.1f}% | "
+                      f"Loss: {loss_val:.4f} | Solve Rate: {val_sr*100:.1f}% | "
                       f"Raw Admissibility: {admissible_rate*100:.1f}%")
                 
                 if val_sr >= success_threshold:
