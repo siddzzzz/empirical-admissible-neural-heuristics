@@ -7,6 +7,7 @@ import random
 import time
 import argparse
 import gc
+import copy
 
 # Add project root to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -145,6 +146,11 @@ def train():
         model_path = os.path.join(model_dir, f"admissible_{args.puzzle}.pt")
     
     step = 0
+    best_val_sr = 0.0
+    best_model_state = copy.deepcopy(model.state_dict())
+    best_optimizer_state = copy.deepcopy(optimizer.state_dict())
+    patience_counter = 0
+    revert_patience = 5  # Revert after 5 evaluations without improvement
     start_time = time.time()
     
     print("Starting Admissible Neural Heuristic training loop...")
@@ -248,16 +254,48 @@ def train():
                       f"Loss: {loss_val:.4f} | Solve Rate: {val_sr*100:.1f}% | "
                       f"Raw Admissibility: {admissible_rate*100:.1f}%")
                 
+                # Save the best model achieved at the current curriculum depth
+                best_model_path = model_path.replace(".pt", "_best.pt")
+                if val_sr > best_val_sr:
+                    best_val_sr = val_sr
+                    patience_counter = 0  # Reset patience
+                    best_model_state = copy.deepcopy(model.state_dict())
+                    best_optimizer_state = copy.deepcopy(optimizer.state_dict())
+                    torch.save(model.state_dict(), best_model_path)
+                    print(f"[NEW BEST] New best solve rate at Depth {curriculum_depth}: {val_sr*100:.1f}%. Saved to {best_model_path}")
+                else:
+                    patience_counter += 1
+                    print(f"Patience: {patience_counter}/{revert_patience} evaluations without improvement at Depth {curriculum_depth}")
+
                 if val_sr >= success_threshold:
                     print(f"--- Curriculum Level Up! Passed Depth {curriculum_depth} with {val_sr*100:.1f}% success rate. ---")
                     curriculum_depth += 1
+                    best_val_sr = 0.0  # Reset best rate tracker for next level
+                    patience_counter = 0  # Reset patience for new level
                     if curriculum_depth > max_depth:
-                        print("🎉 CONGRATULATIONS! Admissible Neural Heuristic training successfully completed curriculum! 🎉")
+                        print("CONGRATULATIONS! Admissible Neural Heuristic training successfully completed curriculum!")
                         break
                     
                     # Save checkpoint
                     torch.save(model.state_dict(), model_path)
+                    best_model_state = copy.deepcopy(model.state_dict())
+                    best_optimizer_state = copy.deepcopy(optimizer.state_dict())
                     print(f"Saved checkpoint to {model_path}")
+                
+                # If performance has stagnated, automatically revert to the best state and decay learning rate
+                elif patience_counter >= revert_patience:
+                    print(f"[WARNING] Performance stagnated. Reverting model and optimizer to best state at Depth {curriculum_depth} ({best_val_sr*100:.1f}%)...")
+                    model.load_state_dict(best_model_state)
+                    optimizer.load_state_dict(best_optimizer_state)
+                    patience_counter = 0  # Reset counter
+                    
+                    # Decay learning rate upon reversion to help escape local minima/divergences
+                    for g in optimizer.param_groups:
+                        old_lr = g['lr']
+                        new_lr = max(old_lr * 0.5, 1e-5)
+                        if new_lr < old_lr:
+                            g['lr'] = new_lr
+                            print(f"   Decayed learning rate: {old_lr:.2e} -> {new_lr:.2e}")
                     
     except KeyboardInterrupt:
         print("\nTraining interrupted by user.")
