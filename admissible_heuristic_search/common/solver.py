@@ -92,6 +92,7 @@ class AStarSolver:
             nodes_expanded: number of nodes expanded
         """
         self._h_cache = {}
+        self.reopen_count = 0
         if self._is_solved(start_state):
             return [], 0
             
@@ -111,16 +112,24 @@ class AStarSolver:
         tiebreaker = 0
         nodes_expanded = 0
         
+        # Track unique expanded states to count reopenings
+        expanded_states = set()
+        
         # Helper puzzle instance to compute transitions
         # We assume get_state/set_state restores state correctly
         puzzle_helper = self.puzzle
         
         while pq:
             f, g, _, state_tuple, path = heapq.heappop(pq)
-            nodes_expanded += 1
             
             if g > visited.get(state_tuple, float('inf')):
                 continue
+                
+            nodes_expanded += 1
+            if state_tuple in expanded_states:
+                self.reopen_count += 1
+            else:
+                expanded_states.add(state_tuple)
                 
             state_array = np.array(state_tuple)
             if self._is_solved(state_array):

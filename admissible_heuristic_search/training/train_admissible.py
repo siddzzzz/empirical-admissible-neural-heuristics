@@ -100,13 +100,16 @@ def train():
                         help="Optimizer learning rate.")
     parser.add_argument("--steps", type=int, default=-1,
                         help="Number of training steps (default -1 to run indefinitely).")
+    parser.add_argument("--loss_type", type=str, default="asymmetric",
+                        choices=["asymmetric", "mse"],
+                        help="Loss function type to train: asymmetric (default) or standard mse baseline.")
     
     # Allow running in script mode with default values if args are empty
     args, unknown = parser.parse_known_args()
     
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Using device: {device}")
-    print(f"Training parameters: Puzzle={args.puzzle}, Alpha={args.alpha}, Epsilon={args.epsilon}, LR={args.lr}")
+    print(f"Training parameters: Puzzle={args.puzzle}, Alpha={args.alpha}, Epsilon={args.epsilon}, LR={args.lr}, LossType={args.loss_type}")
     
     # Initialize puzzle environment
     if args.puzzle == "cube2x2":
@@ -128,7 +131,10 @@ def train():
     target_model.eval()
     
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=1e-5)
-    loss_fn = AsymmetricLoss(alpha=args.alpha)
+    if args.loss_type == "mse":
+        loss_fn = torch.nn.MSELoss()
+    else:
+        loss_fn = AsymmetricLoss(alpha=args.alpha)
     
     # Training configurations
     batch_size = 128
@@ -140,10 +146,11 @@ def train():
     # Setup weights save path
     model_dir = "trained_models"
     os.makedirs(model_dir, exist_ok=True)
+    suffix = "mse_" if args.loss_type == "mse" else "admissible_"
     if args.puzzle == "lightsout":
-        model_path = os.path.join(model_dir, f"admissible_lightsout_{args.grid_size}x{args.grid_size}.pt")
+        model_path = os.path.join(model_dir, f"{suffix}lightsout_{args.grid_size}x{args.grid_size}.pt")
     else:
-        model_path = os.path.join(model_dir, f"admissible_{args.puzzle}.pt")
+        model_path = os.path.join(model_dir, f"{suffix}{args.puzzle}.pt")
     
     step = 0
     best_val_sr = 0.0
@@ -191,9 +198,10 @@ def train():
                 target_values = target_values.view(B, A)
                 y = torch.min(target_values, dim=1).values # shape: (B,)
                 
-                # Apply Admissible Bellman Operator: y = max(h0(s), y - epsilon)
-                base_h = torch.tensor([puzzle.get_base_heuristic(s) for s in states], dtype=torch.float32, device=device)
-                y = torch.max(base_h, y - args.epsilon)
+                if args.loss_type == "asymmetric":
+                    # Apply Admissible Bellman Operator: y = max(h0(s), y - epsilon)
+                    base_h = torch.tensor([puzzle.get_base_heuristic(s) for s in states], dtype=torch.float32, device=device)
+                    y = torch.max(base_h, y - args.epsilon)
                 
             # 5. Predict values for current states and update network
             states_tensor_raw = torch.tensor(states, dtype=torch.long, device=device)
