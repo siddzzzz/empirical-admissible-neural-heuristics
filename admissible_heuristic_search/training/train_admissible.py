@@ -285,17 +285,21 @@ def train():
                 # If performance has stagnated, automatically revert to the best state and decay learning rate
                 elif patience_counter >= revert_patience:
                     print(f"[WARNING] Performance stagnated. Reverting model and optimizer to best state at Depth {curriculum_depth} ({best_val_sr*100:.1f}%)...")
+                    
+                    # Capture and decay learning rate from the active optimizer before reloading
+                    active_lr = optimizer.param_groups[0]['lr']
+                    new_lr = max(active_lr * 0.5, 1e-5)
+                    
+                    # Revert weights and optimizer momentum/state
                     model.load_state_dict(best_model_state)
                     optimizer.load_state_dict(best_optimizer_state)
-                    patience_counter = 0  # Reset counter
                     
-                    # Decay learning rate upon reversion to help escape local minima/divergences
+                    # Apply decayed learning rate to restored optimizer to prevent override
                     for g in optimizer.param_groups:
-                        old_lr = g['lr']
-                        new_lr = max(old_lr * 0.5, 1e-5)
-                        if new_lr < old_lr:
-                            g['lr'] = new_lr
-                            print(f"   Decayed learning rate: {old_lr:.2e} -> {new_lr:.2e}")
+                        g['lr'] = new_lr
+                    
+                    patience_counter = 0  # Reset counter
+                    print(f"   Applied decayed learning rate to restored optimizer: {active_lr:.2e} -> {new_lr:.2e}")
                     
     except KeyboardInterrupt:
         print("\nTraining interrupted by user.")
