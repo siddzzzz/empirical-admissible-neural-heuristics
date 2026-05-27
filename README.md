@@ -72,36 +72,36 @@ graph TD
 ## 📝 Methodology
 
 ### 1. Underestimating Admissible Bellman Operator
-To ensure our bootstrapping targets remain bounded under the true optimal cost-to-go $h^*(s)$, we define the contractive Admissible Bellman Operator $\mathcal{T}\_{ad}$:
+To ensure our bootstrapping targets remain bounded under the true optimal cost-to-go $h^*(s)$, we define the contractive Admissible Bellman Operator $\mathcal{T}_{ad}$:
 $$
-\mathcal{T}\_{ad} V(s) = \max \left( h\_0(s), \min\_{a \in \mathcal{A}} \left[ \mathcal{C}(s, a) + V(\mathcal{T}(s, a)) \right] - \epsilon \right)
+\mathcal{T}_{ad} V(s) = \max \left( h_0(s), \min_{a \in \mathcal{A}} \left[ \mathcal{C}(s, a) + V(\mathcal{T}(s, a)) \right] - \epsilon \right)
 $$
 where:
-* $h\_0(s)$ is an analytically admissible base heuristic (e.g. Manhattan Distance for sliding tiles, $\lceil k/5 \rceil$ for Lights Out, or $0.0$ for the Rubik's Cube).
+* $h_0(s)$ is an analytically admissible base heuristic (e.g. Manhattan Distance for sliding tiles, $\lceil k/5 \rceil$ for Lights Out, or $0.0$ for the Rubik's Cube).
 * $\mathcal{C}(s, a) = 1.0$ is the uniform action cost.
 * $\epsilon > 0$ is a safety discount parameter. By subtracting $\epsilon$, we depress target values during bootstrapping to create a buffer against function approximation noise.
 
 > [!NOTE]
-> **Theorem 1 (Monotone Underestimation).** If the value target sequence begins with an admissible base heuristic $V^{(0)}(s) = h\_0(s) \le h^*(s)$, then the exact operator application preserves underestimation at all iterations: $V^{(t)}(s) \le h^*(s), \forall t \ge 0$.
+> **Theorem 1 (Monotone Underestimation).** If the value target sequence begins with an admissible base heuristic $V^{(0)}(s) = h_0(s) \le h^*(s)$, then the exact operator application preserves underestimation at all iterations: $V^{(t)}(s) \le h^*(s), \forall t \ge 0$.
 
 ### 2. Asymmetric Pinball Loss Function
 Standard regression losses penalize errors symmetrically. To force the network parameters $\theta$ to underpredict, we implement the Asymmetric Pinball Loss:
 $$
-\mathcal{L}\_{\alpha}(h\_\theta(s), y) = \begin{cases} 
-  (y - h\_\theta(s))^2 & \text{if } h\_\theta(s) \le y \\
-  \alpha \cdot (h\_\theta(s) - y)^2 & \text{if } h\_\theta(s) > y
+\mathcal{L}_{\alpha}(h_\theta(s), y) = \begin{cases} 
+  (y - h_\theta(s))^2 & \text{if } h_\theta(s) \le y \\
+  \alpha \cdot (h_\theta(s) - y)^2 & \text{if } h_\theta(s) > y
 \end{cases}
 $$
-where $y = \mathcal{T}\_{ad} h\_{\text{target}}(s)$ is the admissible target and $\alpha \gg 1$ is the overestimation penalty multiplier. Setting $\alpha = 100.0$ heavily penalizes positive overestimation, forcing the network's function approximation to sit safely below the target landscape.
+where $y = \mathcal{T}_{ad} h_{\text{target}}(s)$ is the admissible target and $\alpha \gg 1$ is the overestimation penalty multiplier. Setting $\alpha = 100.0$ heavily penalizes positive overestimation, forcing the network's function approximation to sit safely below the target landscape.
 
 ### 3. Post-Hoc Safety Calibration Offset
-Even with asymmetric training, function approximation errors on unseen states can lead to local overestimation. We define a validation dataset $\mathcal{D}\_{\text{val}}$ scrambled at various depths $d$. Because each action has a cost of $1.0$, the scramble depth $d$ serves as a mathematical upper bound on the optimal cost-to-go ($h^*(s) \le d$). We compute the maximum overestimation offset:
+Even with asymmetric training, function approximation errors on unseen states can lead to local overestimation. We define a validation dataset $\mathcal{D}_{\text{val}}$ scrambled at various depths $d$. Because each action has a cost of $1.0$, the scramble depth $d$ serves as a mathematical upper bound on the optimal cost-to-go ($h^*(s) \le d$). We compute the maximum overestimation offset:
 $$
-\delta = \max\_{s \in \mathcal{D}\_{\text{val}}} \max(0, h\_\theta(s) - d)
+\delta = \max_{s \in \mathcal{D}_{\text{val}}} \max(0, h_\theta(s) - d)
 $$
 The final calibrated heuristic is defined as:
 $$
-h\_{\text{calib}}(s) = \max(h\_0(s), h\_\theta(s) - \delta)
+h_{\text{calib}}(s) = \max(h_0(s), h_\theta(s) - \delta)
 $$
 
 ### 4. Probabilistic Safety Guarantees
@@ -169,28 +169,28 @@ The comparative evaluations on independent test sets ($N_{\text{test}} = 10,000$
 
 | Puzzle Domain | Heuristic Type | Admissibility Rate | Solve Rate | Avg Nodes Expanded | Avg Reopenings | Path Optimality Gap |
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: |
-| **Lights Out (3x3)** | Analytical Base ($h\_0$) | 100.0% | 100.0% | 495.5 | 0.00 | 0.0% |
+| **Lights Out (3x3)** | Analytical Base ($h_0$) | 100.0% | 100.0% | 495.5 | 0.00 | 0.0% |
 | | MSE Network | 100.0% | 100.0% | 205.7 | 0.00 | 0.0% |
-| | Calibrated ($h\_{\text{calib}}$) | **100.0%** | **100.0%** | **329.3** | **0.00** | **0.0%** |
+| | Calibrated ($h_{\text{calib}}$) | **100.0%** | **100.0%** | **329.3** | **0.00** | **0.0%** |
 | **8-Puzzle (3x3)** | Analytical Base (Manhattan) | 100.0% | 100.0% | 17.5 | 0.00 | 0.0% |
 | | MSE Network | **66.0%** | 100.0% | 11.7 | 0.00 | 0.0% |
-| | Calibrated ($h\_{\text{calib}}$) | **100.0%** | **100.0%** | **13.8** | **0.00** | **0.0%** |
-| **2x2 Rubik's Cube** | Analytical Base ($h\_0=0$) | 100.0% | 2.0% | 735.0 | 0.00 | 0.0% |
+| | Calibrated ($h_{\text{calib}}$) | **100.0%** | **100.0%** | **13.8** | **0.00** | **0.0%** |
+| **2x2 Rubik's Cube** | Analytical Base ($h_0=0$) | 100.0% | 2.0% | 735.0 | 0.00 | 0.0% |
 | | MSE Network | **76.0%** | 74.0% | 141.7 | 0.00 | 0.03% |
-| | Calibrated ($h\_{\text{calib}}$) | **100.0%** | **58.0%** | **212.3** | **0.00** | **0.0%** |
+| | Calibrated ($h_{\text{calib}}$) | **100.0%** | **58.0%** | **212.3** | **0.00** | **0.0%** |
 
 > [!WARNING]
-> While MSE networks achieve high solve rates, they violate admissibility on **34.0%** of 8-Puzzle states and **24.0%** of 2x2 Rubik's Cube states. This induces a suboptimal path gap (e.g. 0.03% gap on the 2x2 Cube). The calibrated heuristic $h\_{\text{calib}}$ maintains zero observed admissibility violations on the evaluation sets, guaranteeing path optimality.
+> While MSE networks achieve high solve rates, they violate admissibility on **34.0%** of 8-Puzzle states and **24.0%** of 2x2 Rubik's Cube states. This induces a suboptimal path gap (e.g. 0.03% gap on the 2x2 Cube). The calibrated heuristic $h_{\text{calib}}$ maintains zero observed admissibility violations on the evaluation sets, guaranteeing path optimality.
 
 ### Key Highlights
 *   **Consistency and Reopenings:** The average number of A* node reopenings is **exactly 0.00** across all models. We note that reopenings are relatively rare because the learned heuristics remain close to smooth distance-to-go manifolds despite lacking formal consistency guarantees. Thus, although consistency is not mathematically guaranteed, the learned neural heuristic behaves as a consistent heuristic in practice, causing zero search overhead due to reopenings.
 *   **Why Post-Hoc Calibration is Necessary:** Although the raw uncalibrated asymmetric network achieved 100% empirical admissibility on these specific evaluation sets, it still occasionally violates admissibility on out-of-distribution states or at deeper scramble depths. This is confirmed by our exhaustive verification study on the complete Lights Out 3x3 state space, where raw asymmetric models still show admissibility violations, whereas post-hoc calibration offset ($\delta$) provides a robust safety guardrail to mathematically guarantee admissibility.
 *   **Exhaustive Global Verification (LO 3x3):** BFS-based evaluations over the complete 512-state space showed that MSE violates admissibility on **13.48%** of states. The calibrated neural heuristic achieved a **100.0% global admissibility rate** (0 violations).
 *   **Ablation Study (8-Puzzle):**
-    *   Bellman Operator only ($\mathcal{T}\_{ad}$): 91.8% Admissibility | 16.4 Avg Nodes
-    *   $\mathcal{T}\_{ad}$ + Asymmetric Loss ($\mathcal{L}\_\alpha$): 98.0% Admissibility | 17.3 Avg Nodes
-    *   $\mathcal{T}\_{ad}$ + $\mathcal{L}\_\alpha$ + Calibration safety offset ($\delta$): **100.0% Admissibility** | **17.7 Avg Nodes**
-*   **Comparisons to Bounded-Suboptimal Baselines (Weighted A* & DeepCubeA):** Deep neural heuristic frameworks like DeepCubeA commonly employ Weighted A* or Anytime Repairing A* (ARA*) with weights $w > 1$ (e.g. $w = 1.5$) to trade path optimality for faster search times. On the 2x2 Rubik's Cube, running Weighted A* with $w = 1.5$ using the MSE baseline network yields a solve rate of 82.0% and expands 98.4 nodes, but introduces an average path optimality gap of 2.1%. In contrast, our calibrated admissible heuristic ($h\_{\text{calib}}$) guarantees 100% path optimality (0.0% gap) on all solved states while still reducing expansions by 71.1% over blind search, providing a clear path-optimal alternative.
+    *   Bellman Operator only ($\mathcal{T}_{ad}$): 91.8% Admissibility | 16.4 Avg Nodes
+    *   $\mathcal{T}_{ad}$ + Asymmetric Loss ($\mathcal{L}_\alpha$): 98.0% Admissibility | 17.3 Avg Nodes
+    *   $\mathcal{T}_{ad}$ + $\mathcal{L}_\alpha$ + Calibration safety offset ($\delta$): **100.0% Admissibility** | **17.7 Avg Nodes**
+*   **Comparisons to Bounded-Suboptimal Baselines (Weighted A* & DeepCubeA):** Deep neural heuristic frameworks like DeepCubeA commonly employ Weighted A* or Anytime Repairing A* (ARA*) with weights $w > 1$ (e.g. $w = 1.5$) to trade path optimality for faster search times. On the 2x2 Rubik's Cube, running Weighted A* with $w = 1.5$ using the MSE baseline network yields a solve rate of 82.0% and expands 98.4 nodes, but introduces an average path optimality gap of 2.1%. In contrast, our calibrated admissible heuristic ($h_{\text{calib}}$) guarantees 100% path optimality (0.0% gap) on all solved states while still reducing expansions by 71.1% over blind search, providing a clear path-optimal alternative.
 
 ---
 
