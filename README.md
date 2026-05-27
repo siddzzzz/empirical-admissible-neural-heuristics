@@ -73,9 +73,9 @@ graph TD
 
 ### 1. Underestimating Admissible Bellman Operator
 To ensure our bootstrapping targets remain bounded under the true optimal cost-to-go $h^*(s)$, we define the contractive Admissible Bellman Operator $\mathcal{T}_{ad}$:
-$$
+```math
 \mathcal{T}_{ad} V(s) = \max \left( h_0(s), \min_{a \in \mathcal{A}} \left[ \mathcal{C}(s, a) + V(\mathcal{T}(s, a)) \right] - \epsilon \right)
-$$
+```
 where:
 * $h_0(s)$ is an analytically admissible base heuristic (e.g. Manhattan Distance for sliding tiles, $\lceil k/5 \rceil$ for Lights Out, or $0.0$ for the Rubik's Cube).
 * $\mathcal{C}(s, a) = 1.0$ is the uniform action cost.
@@ -86,23 +86,23 @@ where:
 
 ### 2. Asymmetric Pinball Loss Function
 Standard regression losses penalize errors symmetrically. To force the network parameters $\theta$ to underpredict, we implement the Asymmetric Pinball Loss:
-$$
+```math
 \mathcal{L}_{\alpha}(h_\theta(s), y) = \begin{cases} 
   (y - h_\theta(s))^2 & \text{if } h_\theta(s) \le y \\
   \alpha \cdot (h_\theta(s) - y)^2 & \text{if } h_\theta(s) > y
 \end{cases}
-$$
+```
 where $y = \mathcal{T}_{ad} h_{\text{target}}(s)$ is the admissible target and $\alpha \gg 1$ is the overestimation penalty multiplier. Setting $\alpha = 100.0$ heavily penalizes positive overestimation, forcing the network's function approximation to sit safely below the target landscape.
 
 ### 3. Post-Hoc Safety Calibration Offset
 Even with asymmetric training, function approximation errors on unseen states can lead to local overestimation. We define a validation dataset $\mathcal{D}_{\text{val}}$ scrambled at various depths $d$. Because each action has a cost of $1.0$, the scramble depth $d$ serves as a mathematical upper bound on the optimal cost-to-go ($h^*(s) \le d$). We compute the maximum overestimation offset:
-$$
+```math
 \delta = \max_{s \in \mathcal{D}_{\text{val}}} \max(0, h_\theta(s) - d)
-$$
+```
 The final calibrated heuristic is defined as:
-$$
+```math
 h_{\text{calib}}(s) = \max(h_0(s), h_\theta(s) - \delta)
-$$
+```
 
 ### 4. Probabilistic Safety Guarantees
 Assuming validation states are sampled independent and identically distributed (IID) from a deployment distribution $\mathcal{D}$, we reframe our safety guarantees under a probabilistic context. Our confidence that the true out-of-distribution admissibility violation rate remains below any target safety budget increases exponentially with the size of the validation dataset $N$. By selecting a large validation sample size (e.g. $N=10,000$), we empirically minimize the risk of out-of-distribution violations, providing a validation-calibrated safety verification.
@@ -211,9 +211,9 @@ This baseline framework trains a neural network heuristic to solve the 2x2 Rubik
 
 ## 📝 Methodology
 1.  **Value Network:** Estimates cost-to-go using standard Bellman targets:
-    $$
-    V(s) = \min_{a \in \mathcal{A}} \left[ \mathcal{C}(s, a) + V(s') \right]
-    $$
+    ```math
+V(s) = \min_{a \in \mathcal{A}} \left[ \mathcal{C}(s, a) + V(s') \right]
+```
     trained with standard Huber Loss.
 2.  **Hierarchical Macros:** The branching factor contains 18 primitive face turns and a set of macro-action sequences to bypass local minima in the state graph.
 3.  **Batched Heuristic Evaluation:** Batches forward passes of expanded child states through the neural network during search, yielding a **15–20x search speedup** on CPU.
