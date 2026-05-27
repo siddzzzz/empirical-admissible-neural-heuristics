@@ -82,7 +82,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-st.title("🧠 Provably Admissible Neural Heuristics Solver")
+st.title("🧠 Validation-Calibrated Admissible Neural Heuristic Solver")
 
 # Helper: Render the 3D rotatable cube in Plotly
 def get_3d_cube_plotly(state):
@@ -220,6 +220,7 @@ puzzle = st.session_state.puzzle
 state = st.session_state.puzzle_state
 
 # Load correct neural network heuristic weights
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 weights_mapping = {
     "Lights Out (3x3 Grid)": ("admissible_lightsout_3x3.pt", "lightsout"),
     "Lights Out (5x5 Grid)": ("admissible_lightsout_5x5.pt", "lightsout"),
@@ -227,7 +228,7 @@ weights_mapping = {
     "2x2 Rubik's Cube": ("admissible_cube2x2.pt", "cube2x2")
 }
 filename, argname = weights_mapping[st.session_state.puzzle_type]
-weights_path = os.path.join("trained_models", filename)
+weights_path = os.path.join(project_root, "trained_models", filename)
 
 model = None
 model_loaded = False
@@ -483,6 +484,9 @@ with tab2:
     st.markdown(r"""
     This tab evaluates how well the Value Network's heuristic predictions match the true scramble depth.
     An **admissible** heuristic ($h(s) \le h^*(s)$) is required to guarantee optimal search paths.
+    By subtracting a post-hoc calibration safety offset ($\delta$) from the raw predictions, the calibrated heuristic:
+    $$h_{\text{calib}}(s) = \max(h_0(s), h_\theta(s) - \delta)$$
+    ensures empirical admissibility on the validation scramble distribution.
     """)
     
     if model_loaded:
@@ -491,7 +495,7 @@ with tab2:
         # Show current calibrated delta if available
         if 'calibrated_deltas' in st.session_state and st.session_state.puzzle_type in st.session_state.calibrated_deltas:
             current_delta = st.session_state.calibrated_deltas[st.session_state.puzzle_type]
-            st.info(f"Active Calibration Offset for {st.session_state.puzzle_type}: **&delta; = {current_delta:.4f}** (Guarantees admissibility).")
+            st.info(f"Active Calibration Offset for {st.session_state.puzzle_type}: **&delta; = {current_delta:.4f}** (Guarantees empirical admissibility under the evaluation protocol).")
 
         # Let user run a live calibration scan and plot it
         if st.button("Run Heuristic Calibration scan"):
@@ -580,6 +584,6 @@ with tab2:
                 with m_col2:
                     st.metric(label="Post-Hoc Safety Offset (delta)", value=f"{max_overestimation:.4f}")
                     
-                st.success("Calibration scan complete! Calibrated heuristic h_calib(s) = max(h0, h_theta - delta) is guaranteed 100% admissible.")
+                st.success("Calibration scan complete! Calibrated heuristic h_calib(s) = max(h0, h_theta - delta) achieves 100% empirical admissibility under the evaluation protocol.")
     else:
         st.info("Calibration features are disabled because no trained weights were found for the selected puzzle.")
