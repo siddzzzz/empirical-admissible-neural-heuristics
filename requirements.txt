@@ -3,4 +3,5 @@ numpy
 torch
 stable-baselines3
 streamlit
+plotly
 matplotlib
