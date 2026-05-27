@@ -6,16 +6,14 @@ This repository contains two state-of-the-art frameworks combining reinforcement
 
 ## 📄 Paper & Preprint
 
-Our academic paper is titled: **"Validation-Calibrated Admissible Neural Heuristic Search for Combinatorial Optimization Puzzles"**
-*   **LaTeX Sources:** The complete LaTeX source files and associated vector assets are located in the [`paper/`](file:///e:/rubikscube/Hierarchical-Reinforcement-Learning-for-Rubik-s-Cube-Solving/paper/) directory.
+Our academic paper is titled: **"Learning Empirically Admissible Neural Heuristics for Combinatorial Search"**
 *   **arXiv Preprint:** [arXiv:2605.XXXXX (Placeholder link for publication)](https://arxiv.org/abs/2605.XXXXX)
-*   **Compiled PDF:** Compile [`paper/paper.tex`](file:///e:/rubikscube/Hierarchical-Reinforcement-Learning-for-Rubik-s-Cube-Solving/paper/paper.tex) locally with `pdfflatex` to generate the PDF preprint.
 
 ---
 
 ## 📁 Repository Structure
 
-The codebase is organized into two main workspaces, alongside LaTeX source files for the academic paper and pre-trained model weights:
+The codebase is organized into two main workspaces alongside pre-trained model weights:
 
 ```text
 Hierarchical-Reinforcement-Learning-for-Rubik-s-Cube-Solving/
@@ -47,12 +45,6 @@ Hierarchical-Reinforcement-Learning-for-Rubik-s-Cube-Solving/
 │   ├── admissible_tile8.pt            # Calibrated admissible model for 8-Puzzle
 │   ├── mse_cube2x2.pt                 # Standard MSE baseline model for 2x2 Rubik's Cube
 │   └── mse_tile8.pt                   # Standard MSE baseline model for 8-Puzzle
-│
-├── paper/                             # LaTeX source files, vector graphs, and diagrams for the paper
-│   ├── paper.tex                      # Academic paper source LaTeX document
-│   ├── calibration_landscape.pdf      # Graph of heuristic calibration profiles
-│   ├── search_nodes_comparison.pdf    # Comparative bar chart of search node expansions
-│   └── complexity_scaling.pdf         # Scaling behavior vs. scramble depth
 │
 ├── requirements.txt                   # Dependency file (PyTorch, Streamlit, Plotly, etc.)
 └── LICENSE                            # MIT License
