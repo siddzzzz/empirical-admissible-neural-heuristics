@@ -7,7 +7,7 @@ This repository contains two state-of-the-art frameworks combining reinforcement
 ## 📄 Paper & Preprint
 
 Our academic paper is titled: **"Learning Empirically Admissible Neural Heuristics for Combinatorial Search"**
-*   **arXiv Preprint:** [arXiv:2605.XXXXX (Placeholder link for publication)](https://arxiv.org/abs/2605.XXXXX)
+*   **arXiv Preprint:** [arXiv:2606.04860](https://arxiv.org/abs/2606.04860)
 
 ---
 
