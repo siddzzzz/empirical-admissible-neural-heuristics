@@ -248,3 +248,21 @@ To guarantee full reproducibility, the model architectures and hyperparameters u
 *   **Loss Skew Penalty ($\alpha$):** $\alpha = 100.0$.
 *   **Safety Discount ($\epsilon$):** $\epsilon = 0.1$.
 *   **Search Node Budget:** Scaled dynamically with search depth: 1,200 nodes for depths 1-4, 2,500 nodes for depths 5-7, 4,000 nodes for depths 8-10, 6,000 nodes for depths 11-13, and 10,000 nodes for depth 14.
+
+---
+
+## ✒️ Citation
+
+If you use this codebase or paper in your research, please cite it as:
+
+```bibtex
+@misc{sahay2026learningempiricallyadmissibleneural,
+      title={Learning Empirically Admissible Neural Heuristics for Combinatorial Search}, 
+      author={Siddharth Sahay},
+      year={2026},
+      eprint={2606.04860},
+      archivePrefix={arXiv},
+      primaryClass={cs.LG},
+      url={https://arxiv.org/abs/2606.04860}, 
+}
+```

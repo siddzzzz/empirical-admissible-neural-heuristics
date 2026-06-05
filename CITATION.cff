@@ -1,0 +1,19 @@
+cff-version: 1.2.0
+message: "If you use this software or paper, please cite it as below."
+authors:
+  - family-names: "Sahay"
+    given-names: "Siddharth"
+title: "Learning Empirically Admissible Neural Heuristics for Combinatorial Search"
+version: 1.0.0
+url: "https://github.com/siddzzzz/empirical-admissible-neural-heuristics"
+preferred-citation:
+  type: generic
+  authors:
+    - family-names: "Sahay"
+      given-names: "Siddharth"
+  title: "Learning Empirically Admissible Neural Heuristics for Combinatorial Search"
+  year: 2026
+  eprint: "2606.04860"
+  archivePrefix: "arXiv"
+  primaryClass: "cs.LG"
+  url: "https://arxiv.org/abs/2606.04860"
