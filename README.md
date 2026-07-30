@@ -244,18 +244,3 @@ To guarantee full reproducibility, the model architectures and hyperparameters u
 
 ---
 
-## ✒️ Citation
-
-If you use this codebase or paper in your research, please cite it as:
-
-```bibtex
-@misc{sahay2026learningempiricallyadmissibleneural,
-      title={Learning Empirically Admissible Neural Heuristics for Combinatorial Search}, 
-      author={Siddharth Sahay},
-      year={2026},
-      eprint={2606.04860},
-      archivePrefix={arXiv},
-      primaryClass={cs.LG},
-      url={https://arxiv.org/abs/2606.04860}, 
-}
-```
